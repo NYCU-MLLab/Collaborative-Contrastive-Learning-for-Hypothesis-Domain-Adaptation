@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description = "ECAPA_trainer")
 ## Training Settings
 parser.add_argument('--num_frames',         type=int,   default=200,     help='Duration of the input segments, eg: 200 for 2 second')
 parser.add_argument('--max_epoch',          type=int,   default=25,      help='Maximum number of epochs')
-parser.add_argument('--batch_size',         type=int,   default=64,      help='Batch size')
+parser.add_argument('--batch_size',         type=int,   default=128,      help='Batch size')
 parser.add_argument('--n_cpu',              type=int,   default=4,       help='Number of loader threads')
 parser.add_argument('--test_step',          type=int,   default=1,       help='Test and save every [test_step] epochs')
 parser.add_argument('--lr',                 type=float, default=0.001,   help='Learning rate')
@@ -29,20 +29,18 @@ parser.add_argument("--lr_decay",           type=float, default=0.9,     help='L
 parser.add_argument('--dataset',  		type=str,   required=True)
 
 ### Train CNCeleb1
-#parser.add_argument('--train_list', 	type=str,   default="/home/sv/CN-Celeb_flac/train.csv",    				   help='The path of the CNCeleb training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
-#parser.add_argument('--train_path', 	type=str,   default="/home/sv/CN-Celeb_flac/data",  					   help='The path of the CNCeleb training data')
+parser.add_argument('--train_list', 	type=str,   default="/home/sv/CN-Celeb_flac/train.csv",    				   help='The path of the CNCeleb training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
+parser.add_argument('--train_path', 	type=str,   default="/home/sv/CN-Celeb_flac/data",  					   help='The path of the CNCeleb training data')
 ##  Eval CNCeleb1
-#parser.add_argument('--eval_list',  	type=str,   default="/home/sv/CN-Celeb_flac/eval/lists/trials.lst",        help='The path of the CNCeleb evaluation list')
-#parser.add_argument('--eval_path',  	type=str,   default="/home/sv/CN-Celeb_flac/eval",                    	   help='The path of the CNCeleb evaluation data')
-
+parser.add_argument('--eval_list',  	type=str,   default="/home/sv/CN-Celeb_flac/eval/lists/trials.lst",        help='The path of the CNCeleb evaluation list')
+parser.add_argument('--eval_path',  	type=str,   default="/home/sv/CN-Celeb_flac/eval",                    	   help='The path of the CNCeleb evaluation data')
 
 ### Train CommonVoice
-parser.add_argument('--train_list', 	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/train.tsv",  help='The path of the Common Voice training list')
-parser.add_argument('--train_path', 	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/clips",      help='The path of the Common Voice  training data')
+#parser.add_argument('--train_list', 	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/train.tsv",  help='The path of the Common Voice training list')
+#parser.add_argument('--train_path', 	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/clips",      help='The path of the Common Voice  training data')
 ### Eval CommonVoice
-parser.add_argument('--eval_list',      type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/eval.tsv",  help='The path of the Common Voice evaluation list')
-parser.add_argument('--eval_path',  	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/clips",      help='The path of the Common Voice evaluation data')
-
+#parser.add_argument('--eval_list',      type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/eval.tsv",  help='The path of the Common Voice evaluation list')
+#parser.add_argument('--eval_path',  	type=str,   default="/home/sv/cv-corpus-13.0-2023-03-09/zh-TW/clips",      help='The path of the Common Voice evaluation data')
 
 parser.add_argument('--musan_path', 	type=str,   default="/home/sv/musan",  													 	help='The path to the MUSAN set, eg:"/musan_split" in my case')
 parser.add_argument('--rir_path',   	type=str,   default="/home/sv/voxceleb_trainer/data2/voxceleb2/RIRS_NOISES/simulated_rirs", help='The path to the RIR set, eg:"/simulated_rirs" in my case');
@@ -79,7 +77,7 @@ if __name__ == '__main__':
         logger.info("Model %s loaded from previous state!"%args.initial_model)
         s.load_parameters(args.initial_model, False)
         #EER, minDCF = s.cneval_network(eval_list = args.eval_list, eval_path = args.eval_path)
-        if args.dataset == 'cn':
+        if args.dataset == 'cnceleb':
             logger.info("Evaluate CNCeleb datasets...")
             EER, minDCF = s.cneval_network(eval_list = args.eval_list, eval_path = args.eval_path)
         elif args.dataset == 'commonvoice':
@@ -130,7 +128,7 @@ if __name__ == '__main__':
         ## Evaluation every [test_step] epochs
         if epoch % args.test_step == 0:
             logger.info("Evaluate datasets, Computing EER and minDCF ...")
-            if args.dataset == 'cn':
+            if args.dataset == 'cnceleb':
                 EERs.append(s.cneval_network(eval_list = args.eval_list, eval_path = args.eval_path)[0])
             elif args.dataset == 'commonvoice':
                 EERs.append(s.commoneval_network(eval_list = args.eval_list, eval_path = args.eval_path)[0])

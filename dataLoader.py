@@ -33,7 +33,7 @@ class data_loader(object):
 					file_name		= os.path.join(train_path, line[1])
 					self.data_label.append(speaker_label)
 					self.data_list.append(file_name)
-		elif dataset == 'cn1':
+		elif dataset == 'cnceleb':
 			path = os.path.join(train_path,"**", "*.flac")
 			for f in glob.glob(path, recursive=True):
 				try:

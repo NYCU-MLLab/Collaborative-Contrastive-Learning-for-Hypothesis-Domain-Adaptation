@@ -39,7 +39,6 @@ class CHDAModel(nn.Module):
         self.eps = eps
         self.beta = beta
 
-
         self.optim           	= torch.optim.Adam(self.parameters(), lr = lr, weight_decay = 2e-5)
         self.scheduler       	= torch.optim.lr_scheduler.StepLR(self.optim, step_size = test_step, gamma=lr_decay)
         print("Model para number = %.2f M"%(sum(param.numel() for param in self.speaker_encoder.parameters()) / 1024 / 1024))
@@ -57,11 +56,9 @@ class CHDAModel(nn.Module):
         with tqdm(data_loader, total = total) as tepoch:
             for num, query in enumerate(tepoch, start = 1):
                 tepoch.set_description(f"[Epoch {epoch}]")
-                #if epoch/2 == 0:
-                #    self.fast_encoder = deepcopy(self.speaker_encoder)
                 p = (num-1) / total_steps
                 constant = 2. / (1. + numpy.exp(-10 * p)) - 1
-                query_loss, query_pred, cos_loss = self.meta_forward(num, query[0], query[1], query[2], constant)
+                query_loss, query_pred = self.forward(num, query[0], query[1], query[2], constant)
                 index += len(query[2])
                 top1  += query_pred
                 loss  += query_loss.detach().cpu().numpy()
@@ -81,12 +78,10 @@ class CHDAModel(nn.Module):
         entropy = torch.sum(entropy, dim=1)
         return entropy
 
-    def meta_forward(self, num, query_wx, query_sx, query_y, constant):
-        ## query_wx, query_wy: weak augmentation
+    def forward(self, num, query_wx, query_sx, query_y, constant):
         query_x         = deepcopy(query_sx)
         kl_criterion	= nn.KLDivLoss(size_average=False)
         infonce_criterion = InfoNCE()
-        infonce_paired = InfoNCE(negative_mode='paired')
 
         """fast_encoder 	= deepcopy(self.speaker_encoder)
         fast_classifier = deepcopy(self.speaker_loss)
@@ -98,11 +93,25 @@ class CHDAModel(nn.Module):
         fast_encoder.train()
         fast_classifier.train()"""
 
-        """
         # freeze encoder
         for param in self.speaker_encoder.parameters():
             param.requires_grad = False
-        """
+        for param in self.fast_encoder.parameters():
+            param.requires_grad = False
+
+        stage1_labels	= torch.LongTensor(query_y).to(device)
+        stage1_spec     = self.fast_encoder.covert_spec(query_x.to(device), aug = False)
+        stage1_embb	    = self.fast_encoder.forward(stage1_spec)
+        stage1_loss, stage1_y_pred, stage1_y_proba, stage1_softmax_out	= self.speaker_loss.forward(stage1_embb, stage1_labels)
+        self.zero_grad()
+        stage1_loss.backward()
+        self.optim.step()
+
+        for param in self.speaker_encoder.parameters():
+            param.requires_grad = True
+        for param in self.fast_encoder.parameters():
+            param.requires_grad = True
+
 
         source_relevant, source_irrelevant, weak_irrelevant, y_t, topk, memory = [], [], [], [], [], []
         with torch.no_grad():
@@ -132,24 +141,12 @@ class CHDAModel(nn.Module):
             weak_irrelevant = torch.stack(weak_irrelevant, dim=0)
             y_t = torch.stack(y_t, dim=0)
 
-            ## Updating Memory
-            """spec_irrelevant = self.speaker_encoder.covert_spec(source_irrelevant.to(device), aug = False)
-            embb_irrelevant = self.speaker_encoder.forward(spec_irrelevant)
-            if num == 1:
-                self.confident_memory = deepcopy(torch.mean(embb_irrelevant, dim=0).detach())
-                self.confident_memory = self.confident_memory.unsqueeze(0)
-            elif self.confident_memory.size(dim=0) >= self.num_mem:
-                self.confident_memory = self.confident_memory[1:,:]
-                self.confident_memory = torch.vstack((self.confident_memory, torch.mean(embb_irrelevant, dim=0)))
-            else:
-                self.confident_memory = torch.vstack((self.confident_memory, torch.mean(embb_irrelevant, dim=0)))"""
 
         ## PGD Attack
         ori_x = self.speaker_encoder.covert_spec(source_irrelevant.to(device), aug = False)
         adv_x = self.speaker_encoder.covert_spec(source_irrelevant.to(device), aug = False)
         for i in range(5) :
             adv_x.requires_grad = True
-            #y.float().requires_grad = True
             embb_adv = self.speaker_encoder.forward(adv_x)
             loss, y_pred, y_proba ,softmax_out	= self.speaker_loss.forward(embb_adv, y_t, adaption = False)
             adv_x.retain_grad()
@@ -160,26 +157,24 @@ class CHDAModel(nn.Module):
             adv_x = (ori_x + eta).detach()
         self.zero_grad()
 
+        for name, param in self.named_parameters():
+            if name == 'speaker_loss.weight':
+                param.requires_grad = False
 
-        ## Second Stage speaker loss
         adv_embb           = self.speaker_encoder.forward(adv_x.to(device))
         ori_embb           = self.speaker_encoder.forward(ori_x.to(device))
+        weak_embb	       = self.speaker_encoder.forward(weak_irrelevant)
+        #target_embedding   = torch.vstack((weak_embb, ori_embb))
+        #target_labels 	   = torch.cat((y_t,y_t))
 
         query_spec         = self.speaker_encoder.covert_spec(query_x.to(device), aug = False)
         query_embedding    = self.speaker_encoder.forward(query_spec)
         query_labels	   = torch.LongTensor(query_y).to(device)
-        weak_embb	       = self.speaker_encoder.forward(weak_irrelevant)
         target_embedding   = torch.vstack((weak_embb, query_embedding))
         target_labels 	   = torch.cat((y_t,query_labels))
 
-        #query_labels	   = torch.LongTensor(query_y).to(device)
-        #weak_embb	       = self.speaker_encoder.forward(weak_irrelevant)
-        #target_embedding   = torch.vstack((weak_embb, ori_embb))
-        #target_labels 	   = torch.cat((y_t,y_t))
-
         target_loss, target_y_pred, target_y_proba, target_softmax_out	= self.speaker_loss.forward(target_embedding, target_labels)
         #print('target_loss', target_loss)
-
 
         current_spec       = self.speaker_encoder.covert_spec(source_irrelevant.to(device), aug = False)
         current_embedding  = self.speaker_encoder.forward(current_spec)
@@ -189,20 +184,17 @@ class CHDAModel(nn.Module):
         delay_irrelevant_spec = self.fast_encoder.covert_spec(source_irrelevant.to(device), aug = False)
         delay_irrelevant_embb = self.fast_encoder.forward(delay_irrelevant_spec)
 
-
         delay   = torch.mean(F.normalize(delay_embb, p=2, dim=1),dim=0)
         current = torch.mean(F.normalize(embedding, p=2, dim=1),dim=0)
         kl_loss = F.kl_div(F.log_softmax(current, -1), F.softmax(delay, -1))
-        #print('domain_loss', kl_loss)
 
         weak_loss = infonce_criterion(ori_embb, weak_embb)
-        #print('weak_loss', weak_loss)
 
-        mse_loss =  torch.mean(F.cosine_similarity(F.normalize(ori_embb, p=2, dim=1),F.normalize(delay_irrelevant_embb, p=2, dim=1)))
+        #mse_loss =  torch.mean(F.cosine_similarity(F.normalize(ori_embb, p=2, dim=1),F.normalize(delay_irrelevant_embb, p=2, dim=1)))
 
-        #strong_loss = infonce_paired(current_embedding, adv_embb, delay_irrelevant_embb)
         strong_loss = infonce_criterion(ori_embb, adv_embb)
         #print('strong_loss', strong_loss)
+
         delay_loss = infonce_criterion(ori_embb, delay_irrelevant_embb)
         #print('delay_loss', delay_loss)
 
@@ -215,7 +207,11 @@ class CHDAModel(nn.Module):
         self.optim.step()
         self.momentum_step(m=self.momentum)
 
-        return target_loss, target_y_pred, mse_loss
+        for name, param in self.named_parameters():
+            if name == 'speaker_loss.weight':
+                param.requires_grad = True
+
+        return target_loss, target_y_pred
 
     def save_parameters(self, path):
         torch.save(self.state_dict(), path)
