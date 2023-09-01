@@ -52,10 +52,10 @@ parser.add_argument('--C',              type=int,   default=1024,   				help='Ch
 parser.add_argument('--m',              type=float, default=0.25,    				help='Loss margin in AAM softmax')
 parser.add_argument('--s',              type=float, default=32,     				help='Loss scale in AAM softmax')
 parser.add_argument('--k',              type=float, default=0.8,     				help='percentage to divide the target domain data')
-parser.add_argument('--momentum',       type=float, default=0.8,     				help='momentum value')
+parser.add_argument('--momentum',       type=float, default=0.4,     				help='momentum value')
 parser.add_argument('--eps',            type=float, default=0.01,     				help='epsilon for PGD attack')
 parser.add_argument('--beta',           type=float, default=0.002,     				help='beta for PGD attack')
-parser.add_argument('--n_class',        type=int,   default=1641, required=False,    help='Number of speakers')
+parser.add_argument('--n_class',        type=int,   default=800, required=False,    help='Number of speakers')
 #800  for cn1  , 1641 for commonvoice
 
 ## Command
