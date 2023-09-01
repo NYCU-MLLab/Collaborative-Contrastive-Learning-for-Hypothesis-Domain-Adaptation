@@ -32,16 +32,18 @@ Pretrained model is the `exps/pretrain.model` trained on VoxCeleb2.
 
 Every test_step epoches, system will be evaluated in testing set and print the EER.
 
-The result will be saved in `exps/cnceleb1/score.txt`.
+The result will be saved in `exps/cnceleb/score.txt`.
 
-The model will saved in `exps/cnceleb1/model`.
+The model will saved in `exps/cnceleb/model`.
 ### CNCeleb
 ```sh
 python3 trainCHDAModel.py \
   --initial_model exps/pretrain.model \
-  --save_path exps/cnceleb1
-  --dataset cn \
+  --save_path exps/cnceleb
+  --dataset cnceleb \
   --max_epoch 15 \
+  --k 0.8 \
+  --momentum 0.4 \
   --train_list cnceleb/train.csv \
   --train_path CN-Celeb_flac/data \
   --eval_list trials.lst \
@@ -55,9 +57,11 @@ python3 trainCHDAModel.py \
 ```sh
 python3 trainCHDAModel.py \
   --initial_model exps/pretrain.model \
-  --save_path exps/common1
+  --save_path exps/common
   --dataset commonvoice \
   --max_epoch 20 \
+  --k 0.7 \
+  --momentum 0.6 \
   --train_list comonvoice/train.tsv \
   --train_path cv-corpus-13.0-2023-03-09/zh-TW/clips \
   --eval_list comonvoice/eval.tsv \
@@ -73,6 +77,6 @@ python3 trainCHDAModel.py \
 ```sh
 python3 trainCHDAModel.py \
     --eval \
-    --dataset cn \
+    --dataset cnceleb \
     --initial_model exps/pretrain.model
 ```
